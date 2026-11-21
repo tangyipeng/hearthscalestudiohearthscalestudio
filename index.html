@@ -285,6 +285,11 @@
                 <input id="plaqueUnderInput" type="text" class="dark-input" maxlength="64" placeholder="e.g. Compliments of The Radcliffe Group · Sotheby's" />
               </div>
             </div>
+            <div class="plaque-cta-row">
+              <a href="#commission" id="plaqueToProofLink" class="plaque-cta-link">
+                Apply This Inscription to a Free 360° Proof &rarr;
+              </a>
+            </div>
           </div>
         </div>
       </div>
@@ -362,55 +367,82 @@
 
         <!-- Concierge Inquiry Form -->
         <div class="concierge-card">
-          <div class="eyebrow">No-Obligation Digital Proof</div>
-          <h3>Request a Complimentary 360° Proof</h3>
-          <p>
-            Share a recent or upcoming closing address below. Evan and our modeling team will prepare a 360° proof for your review with zero upfront commitment.
-          </p>
+          <div id="proofFormContainer">
+            <div class="eyebrow">No-Obligation Digital Proof</div>
+            <h3>Request a Complimentary 360° Proof</h3>
+            <p>
+              Share a recent, pending, or favorite 2026 closing address below. Evan and our modeling team will prepare an interactive 360° proof within 48 hours — zero upfront payment.
+            </p>
 
-          <form id="proofRequestForm" class="form-grid">
-            <div>
-              <label class="light-label" for="propAddress">Property Street Address *</label>
-              <input id="propAddress" type="text" class="light-input" required placeholder="e.g. 1517 Falling Star Ave, Westlake Village, CA" />
-            </div>
+            <form id="proofRequestForm" class="form-grid">
+              <input type="text" name="_honey" class="hp-field" tabindex="-1" autocomplete="off" />
 
-            <div class="form-row-2">
               <div>
-                <label class="light-label" for="agentName">Your Name &amp; Brokerage *</label>
-                <input id="agentName" type="text" class="light-input" required placeholder="e.g. Jane Doe · Sotheby's International Realty" />
+                <label class="light-label" for="propAddress">Property Street Address *</label>
+                <input id="propAddress" name="Property_Address" type="text" class="light-input" required placeholder="e.g. 1517 Falling Star Ave, Westlake Village, CA" />
               </div>
+
+              <div class="form-row-2">
+                <div>
+                  <label class="light-label" for="agentContact">Work Email or Mobile (for Proof Link) *</label>
+                  <input id="agentContact" name="Agent_Contact" type="text" class="light-input" required autocomplete="email" placeholder="e.g. jane@compass.com or (310) 555-0192" />
+                </div>
+                <div>
+                  <label class="light-label" for="agentName">Your Name &amp; Brokerage *</label>
+                  <input id="agentName" name="Agent_Name" type="text" class="light-input" required autocomplete="name" placeholder="e.g. Jane Doe · Sotheby's Realty" />
+                </div>
+              </div>
+
+              <div class="form-row-2">
+                <div>
+                  <label class="light-label" for="giftOccasion">Commission Type</label>
+                  <select id="giftOccasion" name="Gift_Occasion" class="light-input">
+                    <option value="Buyer Closing Keepsake">Buyer Closing Keepsake</option>
+                    <option value="Seller Legacy Farewell Gift">Seller Legacy Farewell Gift</option>
+                    <option value="Holiday / 2026 VIP Client Gift">Holiday / 2026 VIP Client Gift</option>
+                    <option value="Architect / Developer Presentation">Architect / Developer Presentation</option>
+                    <option value="Brokerage Team / Volume Inquiry">Brokerage Team / Volume Inquiry</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="light-label" for="plaqueInscription">Front Brass Plaque (Optional)</label>
+                  <input id="plaqueInscription" name="Plaque_Inscription" type="text" class="light-input" placeholder="e.g. 1517 FALLING STAR AVE • EST. 2026" />
+                </div>
+              </div>
+
               <div>
-                <label class="light-label" for="giftOccasion">Commission Type</label>
-                <select id="giftOccasion" class="light-input">
-                  <option value="Buyer Closing Keepsake">Buyer Closing Keepsake</option>
-                  <option value="Seller Legacy Farewell Gift">Seller Legacy Farewell Gift</option>
-                  <option value="Architect / Developer Presentation">Architect / Developer Presentation</option>
-                  <option value="Brokerage Team Inquiry">Brokerage Team / Volume Inquiry</option>
-                </select>
+                <label class="light-label" for="specialNotes">Special Details or Target Closing Date (Optional)</label>
+                <textarea id="specialNotes" name="Special_Notes" rows="2" class="light-input" placeholder="e.g. Include backyard pool cabana &amp; olive trees; closing Dec 12"></textarea>
               </div>
-            </div>
 
-            <div>
-              <label class="light-label" for="plaqueInscription">Desired Front Plaque Text (Optional)</label>
-              <input id="plaqueInscription" type="text" class="light-input" placeholder="e.g. 1517 FALLING STAR AVE • EST. NOV 2026" />
-            </div>
+              <div class="form-actions">
+                <button type="submit" id="submitProofBtn" class="btn btn-brass">Request Free 360° Proof &rarr;</button>
+              </div>
+              <p class="form-submit-meta">
+                48-hour digital proof turnaround &nbsp;&middot;&nbsp; $0 due until you review and approve
+              </p>
+            </form>
 
-            <div>
-              <label class="light-label" for="specialNotes">Special Details or Target Delivery Date (Optional)</label>
-              <textarea id="specialNotes" rows="2" class="light-input" placeholder="e.g. Include backyard pool cabana &amp; olive trees; closing Dec 12"></textarea>
-            </div>
+            <div id="copyToast" class="copy-toast" role="status" aria-live="polite"></div>
+          </div>
 
-            <div class="form-actions">
-              <button type="submit" class="btn btn-brass">Email Proof Request →</button>
-              <button type="button" id="copyBriefBtn" class="btn btn-outline">Copy Brief &amp; Email</button>
+          <div id="proofSuccessBox" class="proof-success-box" hidden aria-live="polite">
+            <div class="eyebrow">Commission Brief Logged</div>
+            <h3>Your 360° Digital Proof Is in Queue.</h3>
+            <p id="proofSuccessSummary">
+              Our architectural modeling team has received your property address and will send your interactive 360° digital proof within 48 hours — with zero payment or obligation until you approve it.
+            </p>
+            <div class="proof-success-meta">
+              <div><span>Submitted Property</span><strong id="confirmAddressVal">&mdash;</strong></div>
+              <div><span>Delivery Channel</span><strong id="confirmContactVal">&mdash;</strong></div>
+              <div><span>Upfront Charge</span><strong>$0.00 (Complimentary 360° Proof)</strong></div>
             </div>
-          </form>
-
-          <div id="copyToast" class="copy-toast" role="status" aria-live="polite"></div>
+            <button type="button" id="resetProofFormBtn" class="btn btn-outline">Submit Another Property Address</button>
+          </div>
 
           <div class="direct-email-bar">
             <span>Prefer a quick one-line email? Send any listing address directly to:</span>
-            <a href="mailto:evan@hearthscalestudio.com">evan@hearthscalestudio.com</a>
+            <a href="mailto:evan@hearthscalestudio.com" id="directEmailLink">evan@hearthscalestudio.com</a>
           </div>
         </div>
       </div>
@@ -530,6 +562,12 @@
     </div>
   </div>
 
+  <script
+    data-goatcounter="https://hearthscalestudio.goatcounter.com/count"
+    data-goatcounter-settings='{"allow_local": false}'
+    async
+    src="https://gc.zgo.at/count.js"
+  ></script>
   <script src="app.js"></script>
 </body>
 </html>

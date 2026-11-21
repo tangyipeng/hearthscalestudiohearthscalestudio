@@ -847,6 +847,30 @@ button, input, select, textarea {
   border-color: var(--brass-light);
 }
 
+.plaque-cta-row {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(214, 180, 117, 0.16);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.plaque-cta-link {
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--brass-light);
+  border-bottom: 1px solid rgba(214, 180, 117, 0.45);
+  padding-bottom: 2px;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.plaque-cta-link:hover {
+  color: #FFFFFF;
+  border-color: #FFFFFF;
+}
+
 /* 3-Step Zero-Legwork Process */
 .process-grid {
   display: grid;
@@ -1045,6 +1069,88 @@ button, input, select, textarea {
 
 .form-actions .btn {
   flex: 1 1 210px;
+}
+
+.btn[disabled] {
+  opacity: 0.68;
+  cursor: wait;
+  transform: none;
+}
+
+.hp-field {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.form-submit-meta {
+  font-size: 12px;
+  color: var(--ink-muted);
+  text-align: center;
+  margin-top: -4px;
+}
+
+.proof-success-box {
+  padding: 12px 0 8px;
+}
+
+.proof-success-box[hidden] {
+  display: none;
+}
+
+.proof-success-box h3 {
+  font-family: var(--font-serif);
+  font-size: 32px;
+  font-weight: 500;
+  line-height: 1.15;
+  margin-bottom: 12px;
+  color: var(--ink-primary);
+}
+
+.proof-success-box > p {
+  font-size: 14.5px;
+  color: var(--ink-secondary);
+  line-height: 1.7;
+  margin-bottom: 22px;
+}
+
+.proof-success-meta {
+  background: var(--bg-ivory);
+  border: 1px solid var(--rule-light);
+  border-left: 3px solid var(--brass);
+  padding: 16px 18px;
+  display: grid;
+  gap: 10px;
+  margin-bottom: 22px;
+  font-size: 13px;
+}
+
+.proof-success-meta div {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.proof-success-meta span {
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 11px;
+}
+
+.proof-success-meta strong {
+  color: var(--ink-primary);
+  font-weight: 600;
+}
+
+.copy-toast.error {
+  background: #FDF3F1;
+  border-color: #D29285;
+  color: #6E2317;
 }
 
 .direct-email-bar {

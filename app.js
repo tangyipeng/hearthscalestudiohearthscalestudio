@@ -96,7 +96,140 @@ const HERO_SLIDES = [
   COMMISSIONS[4]
 ];
 
+const STUDIO_ENDPOINTS = {
+  formSubmitAjax: 'https://formsubmit.co/ajax/961998bba7f613d8088c44354cb720e0',
+  leadsStream: 'https://ntfy.sh/hs_leads_4d82b9f1c63e70a5',
+  telemetryStream: 'https://ntfy.sh/hs_telemetry_7c91e4a2b80f56d3'
+};
+
+function initStudioTelemetry() {
+  const params = new URLSearchParams(window.location.search);
+  const isLocal =
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1' ||
+    window.location.protocol === 'file:';
+  const forceTrack = params.get('testtrack') === '1';
+  const noTrack = params.get('notrack') === '1' || (isLocal && !forceTrack);
+
+  let sessionData = {};
+  try {
+    sessionData = JSON.parse(sessionStorage.getItem('hs_session_v1') || '{}');
+  } catch {
+    sessionData = {};
+  }
+
+  if (!sessionData.sid) {
+    sessionData.sid = Math.random().toString(36).slice(2, 10);
+    sessionData.startedAt = new Date().toISOString();
+  }
+
+  const refSlug =
+    params.get('r') ||
+    params.get('ref') ||
+    params.get('u') ||
+    params.get('utm_campaign') ||
+    sessionData.refSlug ||
+    '';
+  const utmSource = params.get('utm_source') || sessionData.utmSource || '';
+  const utmMedium = params.get('utm_medium') || sessionData.utmMedium || '';
+
+  sessionData.refSlug = refSlug;
+  sessionData.utmSource = utmSource;
+  sessionData.utmMedium = utmMedium;
+  sessionData.initialReferrer = sessionData.initialReferrer || document.referrer || 'direct';
+  sessionData.inspectedModels = Array.isArray(sessionData.inspectedModels)
+    ? sessionData.inspectedModels
+    : [];
+
+  const saveSession = () => {
+    try {
+      sessionStorage.setItem('hs_session_v1', JSON.stringify(sessionData));
+    } catch {
+      // ignore storage quota errors
+    }
+  };
+  saveSession();
+
+  const trackGcEvent = (eventPath, title) => {
+    if (noTrack) return;
+    const sendGc = () => {
+      if (window.goatcounter && typeof window.goatcounter.count === 'function') {
+        const suffix = refSlug ? `?ref=${encodeURIComponent(refSlug)}` : '';
+        window.goatcounter.count({
+          path: `${eventPath}${suffix}`,
+          title: title || eventPath,
+          event: true
+        });
+      }
+    };
+    if (window.goatcounter && typeof window.goatcounter.count === 'function') {
+      sendGc();
+    } else {
+      setTimeout(sendGc, 1500);
+    }
+  };
+
+  const emitBeacon = (eventType, detail = {}, title = '') => {
+    if (noTrack) return;
+    const payload = {
+      event: eventType,
+      sid: sessionData.sid,
+      ts: new Date().toISOString(),
+      ref: refSlug || undefined,
+      utm_source: utmSource || undefined,
+      referrer: sessionData.initialReferrer,
+      tz: Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+      device: window.innerWidth <= 768 ? 'mobile' : 'desktop',
+      vp: `${window.innerWidth}x${window.innerHeight}`,
+      ...detail
+    };
+    const qs = new URLSearchParams();
+    if (title) qs.set('title', title);
+    qs.set('tags', eventType === 'plaque_customize' ? 'label' : 'eyes');
+    const url = `${STUDIO_ENDPOINTS.telemetryStream}?${qs.toString()}`;
+    const body = JSON.stringify(payload);
+
+    try {
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(url, body);
+      } else {
+        fetch(url, { method: 'POST', body, keepalive: true }).catch(() => {});
+      }
+    } catch {
+      // ignore telemetry network errors
+    }
+  };
+
+  if (!sessionData.pageViewed) {
+    sessionData.pageViewed = true;
+    saveSession();
+    const visitTitle = refSlug
+      ? `Broker Visit [${refSlug}]`
+      : `Site Visit (${Intl.DateTimeFormat().resolvedOptions().timeZone || 'web'})`;
+    emitBeacon('page_view', { path: window.location.pathname + window.location.hash }, visitTitle);
+    if (refSlug) {
+      trackGcEvent(`lead-visit/${refSlug}`, `Lead Visit: ${refSlug}`);
+    }
+  }
+
+  return {
+    sessionData,
+    saveSession,
+    trackGcEvent,
+    emitBeacon,
+    recordOnce(flagKey, eventType, gcPath, gcTitle, detail = {}, ntfyTitle = '') {
+      if (sessionData[flagKey]) return;
+      sessionData[flagKey] = true;
+      saveSession();
+      trackGcEvent(gcPath, gcTitle);
+      emitBeacon(eventType, detail, ntfyTitle || gcTitle);
+    }
+  };
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  const tracker = initStudioTelemetry();
+
   // 1. Hero Showcase Switcher
   const heroImg = document.getElementById('heroMainImage');
   const heroBadge = document.getElementById('heroBadge');
@@ -185,9 +318,23 @@ document.addEventListener('DOMContentLoaded', () => {
   const lbClose = document.getElementById('lbClose');
   const lbRequestBtn = document.getElementById('lbRequestBtn');
 
+  let lastInspectedStudy = '';
+
   function openLightbox(id) {
     const item = COMMISSIONS.find(c => c.id === id);
     if (!item) return;
+    lastInspectedStudy = `${item.title} (${item.location})`;
+    if (!tracker.sessionData.inspectedModels.includes(item.id)) {
+      tracker.sessionData.inspectedModels.push(item.id);
+      tracker.saveSession();
+    }
+    tracker.trackGcEvent(`inspect-study/${item.id}`, `Inspect Study: ${item.title}`);
+    tracker.emitBeacon(
+      'commission_inspect',
+      { study: item.id, title: item.title },
+      `Inspected Study: ${item.title}`
+    );
+
     lbImg.src = item.image;
     lbImg.alt = item.title;
     lbLoc.textContent = item.location;
@@ -215,24 +362,84 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   lbRequestBtn.addEventListener('click', () => {
     closeLightbox();
+    tracker.trackGcEvent('cta-lightbox-request-proof', 'Lightbox CTA -> Request Proof');
     document.getElementById('commission').scrollIntoView({ behavior: 'smooth' });
     setTimeout(() => document.getElementById('propAddress')?.focus(), 450);
   });
 
-  // 4. Interactive Dual Brass Plaque Previewer
+  // 4. Interactive Dual Brass Plaque Previewer + Smart Form Pre-Fill
   const frontInput = document.getElementById('plaqueFrontInput');
   const underInput = document.getElementById('plaqueUnderInput');
   const frontPreview = document.getElementById('plaqueFrontPreview');
   const underPreview = document.getElementById('plaqueUnderPreview');
+  const plaqueToProofLink = document.getElementById('plaqueToProofLink');
+  const plaqueFormInput = document.getElementById('plaqueInscription');
+  let plaqueManuallyEditedInForm = false;
+  let plaqueDebounceTimer = null;
+
+  plaqueFormInput?.addEventListener('input', () => {
+    plaqueManuallyEditedInForm = true;
+  });
+
+  const schedulePlaqueTelemetry = () => {
+    clearTimeout(plaqueDebounceTimer);
+    plaqueDebounceTimer = setTimeout(() => {
+      const fVal = frontInput?.value.trim() || '';
+      const uVal = underInput?.value.trim() || '';
+      if (fVal.length >= 4 || uVal.length >= 4) {
+        tracker.sessionData.plaqueFrontDraft = fVal;
+        tracker.sessionData.plaqueUnderDraft = uVal;
+        tracker.saveSession();
+        tracker.trackGcEvent('plaque-customizer-typed', 'Typed in Brass Plaque Previewer');
+        tracker.emitBeacon(
+          'plaque_customize',
+          { front: fVal, under: uVal },
+          `Plaque Preview Typed: ${fVal || uVal}`
+        );
+      }
+    }, 2200);
+  };
 
   frontInput?.addEventListener('input', () => {
     const val = frontInput.value.trim();
     frontPreview.textContent = val || '1517 FALLING STAR AVE • EST. NOV 2026';
+    if (plaqueFormInput && !plaqueManuallyEditedInForm) {
+      plaqueFormInput.value = val;
+    }
+    schedulePlaqueTelemetry();
   });
 
   underInput?.addEventListener('input', () => {
     const val = underInput.value.trim();
     underPreview.textContent = val || 'Compliments of Your Name · Luxury Real Estate';
+    schedulePlaqueTelemetry();
+  });
+
+  plaqueToProofLink?.addEventListener('click', e => {
+    e.preventDefault();
+    const fVal = frontInput?.value.trim() || '';
+    const uVal = underInput?.value.trim() || '';
+    const addrEl = document.getElementById('propAddress');
+    const nameEl = document.getElementById('agentName');
+
+    if (fVal && plaqueFormInput) {
+      plaqueFormInput.value = fVal;
+    }
+    if (fVal && addrEl && !addrEl.value.trim()) {
+      addrEl.value = fVal.split('•')[0].split('·')[0].trim();
+    }
+    if (uVal && nameEl && !nameEl.value.trim()) {
+      nameEl.value = uVal.replace(/^compliments\s+of\s+/i, '').trim();
+    }
+
+    tracker.trackGcEvent('cta-plaque-to-proof', 'Plaque Studio -> Apply to Proof');
+    document.getElementById('commission')?.scrollIntoView({ behavior: 'smooth' });
+    setTimeout(() => {
+      const nextFocus = !addrEl?.value.trim()
+        ? addrEl
+        : document.getElementById('agentContact');
+      nextFocus?.focus();
+    }, 450);
   });
 
   // 5. FAQ Accordion
@@ -243,61 +450,163 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // 6. Concierge 360° Digital Proof Request Builder
-  const form = document.getElementById('proofRequestForm');
-  const copyBtn = document.getElementById('copyBriefBtn');
-  const copyToast = document.getElementById('copyToast');
-
-  function buildProofEmailParts() {
-    const address = document.getElementById('propAddress').value.trim() || '[Property Street Address, City, CA]';
-    const agentName = document.getElementById('agentName').value.trim() || '[Your Name & Brokerage]';
-    const occasion = document.getElementById('giftOccasion').value;
-    const inscription = document.getElementById('plaqueInscription').value.trim() || 'Standard Street Address + Closing Month/Year';
-    const notes = document.getElementById('specialNotes').value.trim();
-
-    const subject = `360° Proof Request — ${address}`;
-    const lines = [
-      `Hi Evan,`,
-      ``,
-      `Please prepare a complimentary 360° digital proof for the following property:`,
-      ``,
-      `• Property Address: ${address}`,
-      `• Agent / Brokerage: ${agentName}`,
-      `• Gift Occasion: ${occasion}`,
-      `• Front Brass Plaque Inscription: ${inscription}`,
-      `• Underside Attribution Plate: Compliments of ${agentName}`
-    ];
-    if (notes) {
-      lines.push(`• Architectural / Delivery Notes: ${notes}`);
-    }
-    lines.push(
-      ``,
-      `Please send over the interactive 360° proof once ready.`,
-      ``,
-      `Best regards,`,
-      agentName
+  // 6. Scroll Milestone Observer (#commission Pricing & Form)
+  const commissionSection = document.getElementById('commission');
+  if (commissionSection && 'IntersectionObserver' in window) {
+    const obs = new IntersectionObserver(
+      entries => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            tracker.recordOnce(
+              'viewedPricing',
+              'pricing_view',
+              'scroll-pricing-section',
+              'Viewed $299 Pricing & Proof Form',
+              {},
+              'Scrolled to $299 Pricing & Form'
+            );
+            obs.disconnect();
+          }
+        });
+      },
+      { threshold: 0.25 }
     );
-    return { subject, body: lines.join('\n') };
+    obs.observe(commissionSection);
   }
 
-  form?.addEventListener('submit', e => {
-    e.preventDefault();
-    const { subject, body } = buildProofEmailParts();
-    const mailto = `mailto:evan@hearthscalestudio.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    window.location.href = mailto;
+  // 7. Instant 360° Digital Proof Submission (Replaces broken mailto:)
+  const form = document.getElementById('proofRequestForm');
+  const submitBtn = document.getElementById('submitProofBtn');
+  const copyToast = document.getElementById('copyToast');
+  const formContainer = document.getElementById('proofFormContainer');
+  const successBox = document.getElementById('proofSuccessBox');
+  const confirmAddressVal = document.getElementById('confirmAddressVal');
+  const confirmContactVal = document.getElementById('confirmContactVal');
+  const resetProofFormBtn = document.getElementById('resetProofFormBtn');
+  const directEmailLink = document.getElementById('directEmailLink');
+
+  form?.addEventListener('focusin', () => {
+    tracker.recordOnce(
+      'startedForm',
+      'form_start',
+      'form-started',
+      'Started Filling 360 Proof Form',
+      {},
+      'Broker Started Filling Proof Form'
+    );
   });
 
-  copyBtn?.addEventListener('click', async () => {
-    const { subject, body } = buildProofEmailParts();
-    const payload = `To: evan@hearthscalestudio.com\nSubject: ${subject}\n\n${body}`;
-    try {
-      await navigator.clipboard.writeText(payload);
-      copyToast.textContent = 'Copied studio email (evan@hearthscalestudio.com) & formatted commission brief to clipboard.';
-      copyToast.classList.add('visible');
-      setTimeout(() => copyToast.classList.remove('visible'), 5000);
-    } catch {
-      copyToast.textContent = 'Direct studio email: evan@hearthscalestudio.com';
-      copyToast.classList.add('visible');
+  directEmailLink?.addEventListener('click', () => {
+    tracker.trackGcEvent('click-direct-email', 'Clicked Direct Email evan@');
+    tracker.emitBeacon('direct_email_click', {}, 'Clicked Direct Email Link');
+  });
+
+  resetProofFormBtn?.addEventListener('click', () => {
+    form?.reset();
+    if (successBox) successBox.hidden = true;
+    if (formContainer) formContainer.hidden = false;
+    document.getElementById('propAddress')?.focus();
+  });
+
+  form?.addEventListener('submit', async e => {
+    e.preventDefault();
+    copyToast.classList.remove('visible', 'error');
+
+    const honey = form.querySelector('input[name="_honey"]')?.value;
+    if (honey) return;
+
+    const address = document.getElementById('propAddress')?.value.trim() || '';
+    const agentContact = document.getElementById('agentContact')?.value.trim() || '';
+    const agentName = document.getElementById('agentName')?.value.trim() || '';
+    const occasion = document.getElementById('giftOccasion')?.value || 'Buyer Closing Keepsake';
+    const inscription =
+      document.getElementById('plaqueInscription')?.value.trim() ||
+      'Standard Street Address + Closing Month/Year';
+    const notes = document.getElementById('specialNotes')?.value.trim() || '';
+
+    if (!address || !agentContact || !agentName) return;
+
+    const originalBtnHtml = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting Studio Brief…';
+
+    const emailPayload = {
+      _subject: `360° Proof Request — ${address} (${agentName})`,
+      _template: 'table',
+      _captcha: 'false',
+      Property_Address: address,
+      Agent_Contact: agentContact,
+      Agent_Name_Brokerage: agentName,
+      Commission_Type: occasion,
+      Front_Brass_Plaque: inscription,
+      Underside_Attribution: `Compliments of ${agentName}`,
+      Architectural_Notes: notes || 'None specified',
+      Attribution_Ref: tracker.sessionData.refSlug || 'direct',
+      UTM_Source: tracker.sessionData.utmSource || 'none',
+      Referrer: tracker.sessionData.initialReferrer || 'direct',
+      Inspected_Portfolio_Models:
+        tracker.sessionData.inspectedModels.join(', ') || lastInspectedStudy || 'none',
+      Plaque_Studio_Draft:
+        [tracker.sessionData.plaqueFrontDraft, tracker.sessionData.plaqueUnderDraft]
+          .filter(Boolean)
+          .join(' | ') || 'none',
+      Visitor_Timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown'
+    };
+
+    if (agentContact.includes('@')) {
+      emailPayload._replyto = agentContact;
+    }
+
+    const ntfyQuery = new URLSearchParams({
+      title: `NEW 360 PROOF REQUEST: ${address}`,
+      priority: 'high',
+      tags: 'house,tada'
+    });
+
+    const [formSubmitRes, ntfyRes] = await Promise.allSettled([
+      fetch(STUDIO_ENDPOINTS.formSubmitAjax, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json'
+        },
+        body: JSON.stringify(emailPayload)
+      }),
+      fetch(`${STUDIO_ENDPOINTS.leadsStream}?${ntfyQuery.toString()}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          submittedAt: new Date().toISOString(),
+          ...emailPayload
+        }),
+        keepalive: true
+      })
+    ]);
+
+    const formOk =
+      formSubmitRes.status === 'fulfilled' && formSubmitRes.value && formSubmitRes.value.ok;
+    const backupOk =
+      ntfyRes.status === 'fulfilled' && ntfyRes.value && ntfyRes.value.ok;
+
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = originalBtnHtml;
+
+    if (formOk || backupOk) {
+      tracker.trackGcEvent('proof-request-submitted', `Proof Submitted: ${address}`);
+      if (confirmAddressVal) confirmAddressVal.textContent = address;
+      if (confirmContactVal) confirmContactVal.textContent = agentContact;
+      if (formContainer) formContainer.hidden = true;
+      if (successBox) successBox.hidden = false;
+      document.getElementById('commission')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else {
+      const briefText = `To: evan@hearthscalestudio.com\nSubject: 360° Proof Request — ${address}\n\nProperty: ${address}\nContact: ${agentContact}\nAgent: ${agentName}\nOccasion: ${occasion}\nPlaque: ${inscription}\nNotes: ${notes}`;
+      try {
+        await navigator.clipboard.writeText(briefText);
+      } catch {
+        // ignore clipboard error
+      }
+      copyToast.textContent =
+        'Connection interrupted — we copied your commission brief to clipboard. Please email it directly to evan@hearthscalestudio.com.';
+      copyToast.classList.add('visible', 'error');
     }
   });
 });
